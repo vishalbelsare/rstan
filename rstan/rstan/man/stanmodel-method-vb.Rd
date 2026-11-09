@@ -26,8 +26,7 @@
 
 \section{Methods}{
   \describe{
-    \item{vb}{\code{signature(object = "stanmodel")}}{
-      %%  ~~describe this method here~~
+    \item{vb}{\code{signature(object = "stanmodel")}
       Call Stan's variational Bayes methods
       for the model defined by S4 class \code{stanmodel} 
       given the data, initial values, etc. 
@@ -125,11 +124,11 @@
 \references{
   The Stan Development Team 
   \emph{Stan Modeling Language User's Guide and Reference Manual}. 
-  \url{http://mc-stan.org}. 
+  \url{https://mc-stan.org}.
 
   The Stan Development Team
   \emph{CmdStan Interface User's Guide}.
-  \url{http://mc-stan.org}.
+  \url{https://mc-stan.org}.
 }
 
 \examples{\dontrun{

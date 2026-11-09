@@ -1,22 +1,31 @@
-PKG_CPPFLAGS=-DNO_FPRINTF_OUTPUT -I"../inst/include" -include stan_sundials_printf_override.hpp
+CXX_STD = CXX17
+PKG_CPPFLAGS = -DNO_FPRINTF_OUTPUT -I"../inst/include" -I"sundials" -include stan_sundials_printf_override.hpp
+PKG_CPPFLAGS += -DBOOST_DISABLE_ASSERTS -DBOOST_PHOENIX_NO_VARIADIC_EXPRESSION -DBOOST_NO_AUTO_PTR -D_REENTRANT -DSTAN_THREADS -DSTRICT_R_HEADERS
+PKG_CXXFLAGS += -DRCPP_PARALLEL_USE_TBB=1 -DSTRICT_R_HEADERS
+PKG_CPPFLAGS += -DUSE_WINTHREAD
+PKG_LIBS = -Wl,--allow-multiple-definition
 
-SUNDIALS_CVODES := \
+SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
+SHLIB_LD = $(SHLIB_CXXLD)
+
+SUNDIALS_SOURCES = $(wildcard sundials/*.c) \
   $(wildcard cvodes/*.c) \
-  $(wildcard sundials/*.c) \
-  $(wildcard sunmatrix/band/[^f]*.c) \
-  $(wildcard sunmatrix/dense/[^f]*.c) \
-  $(wildcard sunlinsol/band/[^f]*.c) \
-  $(wildcard sunlinsol/dense/[^f]*.c) \
-  $(wildcard sunnonlinsol/newton/[^f]*.c) \
-  $(wildcard sunnonlinsol/fixedpoint/[^f]*.c)
+  $(wildcard idas/*.c) \
+  $(wildcard kinsol/*.c) \
+  $(wildcard sunmatrix/band/*.c) \
+  $(wildcard sunmatrix/dense/*.c) \
+  $(wildcard sunlinsol/band/*.c) \
+  $(wildcard sunlinsol/dense/*.c) \
+  $(wildcard sunnonlinsol/newton/*.c) \
+  $(wildcard sunnonlinsol/fixedpoint/*.c) \
+  $(wildcard arkode/*.c) \
+  nvector/serial/nvector_serial.c
 
-SUNDIALS_IDAS := \
-  $(wildcard idas/*.c)
+SOURCES = $(SUNDIALS_SOURCES) init.c
+OBJECTS_C = $(SOURCES:.c=.o)
+OBJECTS = $(OBJECTS_C:.cpp=.o)
 
-SUNDIALS_KINSOL := $(patsubst %.c,%.o, \
-  $(wildcard $(SUNDIALS)/src/kinsol/[^f]*.c))
+$(SHLIB): $(OBJECTS)
 
-SUNDIALS_NVECSERIAL := nvector/serial/nvector_serial.c
-
-SOURCES = $(SUNDIALS_CVODES) $(SUNDIALS_IDAS) $(SUNDIALS_NVECSERIAL) init.c
-OBJECTS = $(SOURCES:.c=.o)
+clean:
+	rm $(OBJECTS)

@@ -18,23 +18,22 @@
 expose_stan_functions_hacks <- function(code, includes = NULL) {
   code <- paste("// [[Rcpp::depends(StanHeaders)]]",
                 "// [[Rcpp::depends(rstan)]]",
+                "// [[Rcpp::plugins(rstan)]]",
                 "// [[Rcpp::depends(RcppEigen)]]",
                 "// [[Rcpp::depends(BH)]]",
-                "#include <stan/math/prim/mat/fun/Eigen.hpp>",
+                "#include <stan/math/prim/fun/Eigen.hpp>",
+                "#include <stan/math/prim/meta.hpp>",
                 "#include <boost/integer/integer_log2.hpp>",
                 "#include <exporter.h>",
                 "#include <RcppEigen.h>",
+                includes,
                 code, sep = "\n")
   code <- gsub("// [[stan::function]]",
                "// [[Rcpp::export]]", code, fixed = TRUE)
-  code <- gsub("stan::math::accumulator<double>& lp_accum__, std::ostream* pstream__ = nullptr){",
+  code <- gsub("stan::math::accumulator<double>&(\\s*)?lp_accum__,(\\n)?(\\s*)?std::ostream\\*(\\n)?(\\s*)?pstream__(\\n)?(\\s*)?=(\\n)?\\s*)?(nullptr|0))(\\s*)?\\{",
                "std::ostream* pstream__ = nullptr){\nstan::math::accumulator<double> lp_accum__;",
-               code, fixed = TRUE)
-  code <- gsub("= nullptr", "= 0", code, fixed = TRUE)
-  if(is.null(includes)) return(code)
-  code <- sub("\n\nstan::io::program_reader prog_reader__() {",
-              paste0("\n", includes, "\nstan::io::program_reader prog_reader__() {"),
-              code, fixed = TRUE)
+               code)
+  code <- gsub("pstream__(\\s*|)=(\\s*|)nullptr", "pstream__ = 0", code)
   return(code)
 }
 
@@ -61,19 +60,18 @@ expose_stan_functions <- function(stanmodel, includes = NULL,
   md5 <- paste("user", tools::md5sum(tf), sep = "_")
   stopifnot(stanc(model_code = mc, model_name = "User-defined functions",
                   allow_undefined = TRUE)$status)
-  r <- .Call("stanfuncs", mc, md5, allow_undefined = TRUE)
+  r <- stanc(model_code = mc, model_name = "User-defined functions",
+             allow_undefined = TRUE,
+             standalone_functions = TRUE)
   code <- expose_stan_functions_hacks(r$cppcode, includes)
 
   WINDOWS <- .Platform$OS.type == "windows"
-  R_version <- with(R.version, paste(major, minor, sep = "."))
-  if (WINDOWS && R_version < "3.7.0") {
-    has_USE_CXX11 <- Sys.getenv("USE_CXX11") != ""
-    Sys.setenv(USE_CXX11 = 1) # -std=c++1y gets added anyways
-    if (!has_USE_CXX11) on.exit(Sys.unsetenv("USE_CXX11"))
+  if (WINDOWS && R.version$major < 4) {
+    stop("expose_stan_functions requires R >= 4.0 on Windows to use C++17")
   } else {
-    has_USE_CXX14 <- Sys.getenv("USE_CXX14") != ""
-    Sys.setenv(USE_CXX14 = 1)
-    if (!has_USE_CXX14) on.exit(Sys.unsetenv("USE_CXX14"))
+    has_USE_CXX17 <- Sys.getenv("USE_CXX17") != ""
+    Sys.setenv(USE_CXX17 = 1)
+    if (!has_USE_CXX17) on.exit(Sys.unsetenv("USE_CXX17"))
   }
 
   if (rstan_options("required"))
@@ -96,6 +94,7 @@ expose_stan_functions <- function(stanmodel, includes = NULL,
     on.exit(close(zz), add = TRUE)
     on.exit(sink(type = "output"), add = TRUE)
   }
+  Rcpp::registerPlugin("rstan", rstanplugin)
   compiled <- pkgbuild::with_build_tools(try(suppressWarnings(
     Rcpp::sourceCpp(code = paste(code, collapse = "\n"), ...)), silent = TRUE),
     required = rstan_options("required") &&
@@ -107,14 +106,10 @@ expose_stan_functions <- function(stanmodel, includes = NULL,
     close(zz)
     try(file.remove(tf), silent = TRUE)
     on.exit(NULL)
-    if (WINDOWS && R_version < "3.7.0") {
-      if (!has_USE_CXX11) on.exit(Sys.unsetenv("USE_CXX11"), add = TRUE)
-    } else {
-      if (!has_USE_CXX14) on.exit(Sys.unsetenv("USE_CXX14"), add = TRUE)
-    }
   }
   DOTS <- list(...)
   if (isTRUE(DOTS$dryRun)) return(code)
+  if (inherits(compiled, "try-error")) stop("Compilation failed!")
   ENV <- DOTS$env
   if (is.null(ENV)) ENV <- globalenv()
   for (x in compiled$functions) {

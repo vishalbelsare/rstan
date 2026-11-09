@@ -38,8 +38,8 @@ boost_path_fun2 <- function() {
 }
 
 PKG_CPPFLAGS_env_fun <- function() {
-   Eigen <- dir(system.file("include", "stan", "math", "prim", 
-                            package = "StanHeaders", mustWork = TRUE), 
+   Eigen <- dir(system.file("include", "stan", "math", "prim",
+                            package = "StanHeaders", mustWork = TRUE),
                 pattern = "Eigen.hpp$", full.names = TRUE, recursive = TRUE)[1]
    paste(' -I"', file.path(inc_path_fun("Rcpp"), '" '),
          ' -I"', file.path(eigen_path_fun(), '" '),
@@ -49,15 +49,19 @@ PKG_CPPFLAGS_env_fun <- function() {
          ' -I"', file.path(inc_path_fun("StanHeaders"), "src", '" '),
          ' -I"', file.path(inc_path_fun("StanHeaders"), '" '),
          ' -I"', file.path(inc_path_fun("RcppParallel"), '" '),
+         utils::capture.output(RcppParallel::CxxFlags()),
          ' -I"', inc_path_fun("rstan"), '"',
          ' -DEIGEN_NO_DEBUG ',
          ' -DBOOST_DISABLE_ASSERTS ',
          ' -DBOOST_PENDING_INTEGER_LOG2_HPP ',
          ' -DSTAN_THREADS ',
-         ' -DBOOST_NO_AUTO_PTR ',
+         ' -DUSE_STANC3',
+         ' -DNEW_RSTAN',
+         ' -DSTRICT_R_HEADERS ',
+         ' -DBOOST_PHOENIX_NO_VARIADIC_EXPRESSION ',
+         ' -D_HAS_AUTO_PTR_ETC=0 ',
          ' -include ', shQuote(Eigen), ' ',
-         ifelse (.Platform$OS.type == "windows", ' -std=c++1y',
-                 ' -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1 '),
+         ' -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1',
          sep = '')
 }
 
@@ -109,28 +113,20 @@ rstanplugin <- function() {
   # cat("INFO: rcpp_pkg_libs = ", rcpp_pkg_libs, "\n")
 
   tbb_libs <- "-ltbb"
-  if (!is.null(tbbmalloc_proxyDllInfo))
-      tbb_libs <- paste(tbb_libs, "-ltbbmalloc -ltbbmalloc_proxy")
 
   PL <- paste(rcpp_pkg_libs,
               shQuote(rstan_StanServices),
               paste0("-L", shQuote(StanHeaders_pkg_libs)),
               "-lStanHeaders",
               paste0("-L", shQuote(RcppParallel_pkg_libs)),
-              tbb_libs)
-  if (.Platform$OS.type == "windows") {
-    list(includes = '// [[Rcpp::plugins(cpp14)]]\n',
-         body = function(x) x,
-         env = list(LOCAL_LIBS = PL,
-                    PKG_CPPFLAGS = paste(Rcpp_plugin$env$PKG_CPPFLAGS,
-                                         PKG_CPPFLAGS_env_fun(), collapse = " ")))
-  } else {
-    list(includes = '// [[Rcpp::plugins(cpp14)]]\n',
+              tbb_libs,
+              utils::capture.output(RcppParallel::RcppParallelLibs()))
+
+    list(includes = '// [[Rcpp::plugins(cpp17)]]\n',
          body = function(x) x,
          env = list(PKG_LIBS = PL,
                     PKG_CPPFLAGS = paste(Rcpp_plugin$env$PKG_CPPFLAGS,
                                          PKG_CPPFLAGS_env_fun(), collapse = " ")))
-  }
 }
 
 
@@ -142,4 +138,3 @@ inlineCxxPlugin <- function(...) {
   settings <- rstanplugin()
   settings
 }
-

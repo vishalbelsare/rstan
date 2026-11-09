@@ -6,31 +6,48 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
-//#include <stan/math/prim/mat/fun/Eigen.hpp>
 #include <stan/version.hpp>
 
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
-#include <boost/random/additive_combine.hpp> // L'Ecuyer RNG
+#include <boost/random/mixmax.hpp>
 #include <boost/random/uniform_real_distribution.hpp>
 
-//#include <Rcpp.h>
-//#include <RcppEigen.h>
+#include <rstan/io/rlist_ref_var_context.hpp>
+#include <rstan/io/r_ostream.hpp>
+#include <rstan/stan_args.hpp>
+#include <rstan/filtered_values.hpp>
+#include <rstan/sum_values.hpp>
+#include <rstan/value.hpp>
+#include <rstan/values.hpp>
+#include <rstan/rstan_writer.hpp>
+#include <rstan/logger.hpp>
 
-//http://cran.r-project.org/doc/manuals/R-exts.html#Allowing-interrupts
+#include <Rcpp.h>
+#include <RcppEigen.h>
+
+//https://cran.r-project.org/doc/manuals/R-exts.html#Allowing-interrupts
 #include <R_ext/Utils.h>
 // void R_CheckUserInterrupt(void);
 
-
 // REF: cmdstan: src/cmdstan/command.hpp
 #include <stan/callbacks/interrupt.hpp>
+#include <stan/callbacks/logger.hpp>
 #include <stan/callbacks/stream_logger.hpp>
 #include <stan/callbacks/stream_writer.hpp>
 #include <stan/callbacks/writer.hpp>
+#include <stan/io/dump.hpp>
 #include <stan/io/empty_var_context.hpp>
+#include <stan/io/ends_with.hpp>
+#include <stan/io/stan_csv_reader.hpp>
+#include <stan/math/prim.hpp>
 #include <stan/model/model_base.hpp>
 #include <stan/services/diagnose/diagnose.hpp>
+#include <stan/services/experimental/advi/fullrank.hpp>
+#include <stan/services/experimental/advi/meanfield.hpp>
 #include <stan/services/optimize/bfgs.hpp>
 #include <stan/services/optimize/lbfgs.hpp>
 #include <stan/services/optimize/newton.hpp>
@@ -48,20 +65,6 @@
 #include <stan/services/sample/hmc_static_unit_e.hpp>
 #include <stan/services/sample/hmc_static_unit_e_adapt.hpp>
 #include <stan/services/sample/standalone_gqs.hpp>
-#include <stan/services/experimental/advi/fullrank.hpp>
-#include <stan/services/experimental/advi/meanfield.hpp>
-
-
-#include <rstan/io/rlist_ref_var_context.hpp>
-#include <rstan/io/r_ostream.hpp>
-#include <rstan/stan_args.hpp>
-#include <rstan/filtered_values.hpp>
-#include <rstan/sum_values.hpp>
-#include <rstan/value.hpp>
-#include <rstan/values.hpp>
-#include <rstan/rstan_writer.hpp>
-#include <rstan/logger.hpp>
-
 
 namespace rstan {
 
@@ -370,7 +373,7 @@ std::vector<double> unconstrained_to_constrained(stan::model::model_base* model,
                                                  const std::vector<double>& params) {
   std::vector<int> params_i;
   std::vector<double> constrained_params;
-  boost::ecuyer1988 rng = stan::services::util::create_rng(random_seed, id);
+  boost::random::mixmax rng = stan::services::util::create_rng(random_seed, id);
   model->write_array(rng, const_cast<std::vector<double>&>(params), params_i,
                      constrained_params);
   return constrained_params;
@@ -389,8 +392,10 @@ int command(stan_args& args,
             Rcpp::List& holder,
             const std::vector<size_t>& qoi_idx,
             const std::vector<std::string>& fnames_oi,
-            boost::ecuyer1988& base_rng) {
-  
+            boost::random::mixmax& base_rng) {
+
+  stan::math::init_threadpool_tbb();
+
   if (args.get_method() == SAMPLING
         && model->num_params_r() == 0
         && args.get_ctrl_sampling_algorithm() != Fixed_param)
@@ -464,7 +469,8 @@ int command(stan_args& args,
   if (args.get_method() == TEST_GRADIENT) {
     double epsilon = args.get_ctrl_test_grad_epsilon();
     double error = args.get_ctrl_test_grad_error();
-    stan::callbacks::writer sample_writer;
+    stan::callbacks::stream_writer sample_writer(Rcpp::Rcout);
+    
     return_code = stan::services::diagnose::diagnose(*model,
                                                      *init_context_ptr,
                                                      random_seed, id,
@@ -1065,6 +1071,7 @@ std::vector<double> stan_fit::unconstrain_pars(Rcpp::List par) {
       throw std::domain_error(msg.str());
     }
     std::vector<int> par_i(model_->num_params_i(), 0);
+/*    
     if (!gradient) {
       double lp = 0;
       if (jacobian_adjust_transform) {
@@ -1075,13 +1082,14 @@ std::vector<double> stan_fit::unconstrain_pars(Rcpp::List par) {
       Rcpp::NumericVector lp2 = Rcpp::wrap(lp);
       return lp2;
     }
+*/ 
     
     std::vector<double> grad;
     double lp = jacobian_adjust_transform ? 
       stan::model::log_prob_grad<true,true >(*model_, upar, par_i, grad, &rstan::io::rcout) :
       stan::model::log_prob_grad<true,false>(*model_, upar, par_i, grad, &rstan::io::rcout);
     Rcpp::NumericVector lp2 = Rcpp::wrap(lp);
-    lp2.attr("gradient") = grad;
+    if (gradient) lp2.attr("gradient") = grad;
     return lp2;
   }
   

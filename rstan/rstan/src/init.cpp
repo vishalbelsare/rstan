@@ -17,7 +17,7 @@
 
 /*
  * To register the functions implemented in C++, see
- * http://cran.r-project.org/doc/manuals/R-exts.html#Registering-native-routines
+ * https://cran.r-project.org/doc/manuals/R-exts.html#Registering-native-routines
  *
  * But it seems not to work as it is supposed to be in that
  * they are still working if not registered.
@@ -43,13 +43,9 @@ SEXP effective_sample_size(SEXP sim, SEXP n_);
 SEXP effective_sample_size2(SEXP sims);
 SEXP split_potential_scale_reduction(SEXP sim, SEXP n_);
 SEXP split_potential_scale_reduction2(SEXP sims_);
-SEXP seq_permutation(SEXP conf);
 SEXP CPP_read_comments(SEXP file, SEXP n);
 SEXP stan_prob_autocovariance(SEXP v);
 SEXP is_Null_NS(SEXP ns);
-SEXP CPP_stanc280(SEXP model_stancode, SEXP model_name, 
-                  SEXP allow_undefined, SEXP include_paths);
-SEXP stanfuncs(SEXP model_stancode, SEXP model_name, SEXP allow_undefined);
 SEXP CPP_stan_version();
 SEXP extract_sparse_components(SEXP A);
 SEXP get_rng_(SEXP seed);
@@ -67,12 +63,9 @@ static const R_CallMethodDef CallEntries[] = {
   CALLDEF(effective_sample_size2, 1),
   CALLDEF(split_potential_scale_reduction, 2),
   CALLDEF(split_potential_scale_reduction2, 1),
-  CALLDEF(seq_permutation, 1),
   CALLDEF(CPP_read_comments, 2),
   CALLDEF(stan_prob_autocovariance, 1),
   CALLDEF(is_Null_NS, 1),
-  CALLDEF(CPP_stanc280, 4),
-  CALLDEF(stanfuncs, 3),
   CALLDEF(CPP_stan_version, 0),
   CALLDEF(extract_sparse_components, 1),
   CALLDEF(get_rng_, 1),
